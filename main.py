@@ -74,7 +74,7 @@ def play_sound(path_to_file):
     p.terminate()
 
 
-def play_and_record():
+def play_and_record(in_device, out_device):
     #instantiate PyAudio
     p = pyaudio.PyAudio()
 
@@ -83,8 +83,8 @@ def play_and_record():
         f = 1
         incr = 0.1
         instream = p.open(format=FORMAT, channels=CHANNELS,
-                rate=RATE, input=True, output=True, output_device_index=2,
-                frames_per_buffer=CHUNK, input_device_index=2)
+                rate=RATE, input=True, output=True, output_device_index=out_device,
+                frames_per_buffer=CHUNK, input_device_index=in_device)
         while True:
 
             # start Recording
@@ -113,6 +113,7 @@ def play_and_record():
 
             #play stream
             #print("mean: {} max: {}".format(mean, m))
+            """
             values = array.array('i', data)
             mean = statistics.mean(data)
             m = max(data)
@@ -124,27 +125,36 @@ def play_and_record():
             data = values.tobytes()
             #for i in range(0, len(chunk)):
                 #chunk[i] = -chunk[i]
+            """
             instream.write(data)
 
             #stop stream
     finally:
-        instream.stop_stream()
-        instream.close()
+        if instream is not None:
+            instream.stop_stream()
+            instream.close()
         #close PyAudio
         p.terminate()
 
+def main():
+    p = pyaudio.PyAudio()
+    for i in range(p.get_device_count()):
+        device = p.get_device_info_by_index(i)
+        if 'maxOutputChannels' in device and device['maxOutputChannels'] > 0:
+            print(i, device['name'])
+    out_device = int(input("Select output device #:"))
 
-p = pyaudio.PyAudio()
-for i in range(p.get_device_count()):
-    device = p.get_device_info_by_index(i)
-    if 'maxOutputChannels' in device and device['maxOutputChannels'] > 0:
-        name = device['name']
-        print("{} {}".format(name, i))
-
-print(p.get_device_info_by_index(2))
-
+    for i in range(p.get_device_count()):
+        device = p.get_device_info_by_index(i)
+        if 'maxInputChannels' in device and device['maxInputChannels'] > 0:
+            print(i, device['name'])
+    in_device = int(input("Select input device #:"))
 #record(WAVE_OUTPUT_FILENAME)
 #play_sound(WAVE_OUTPUT_FILENAME)
+    play_and_record(in_device, out_device)
 
-play_and_record()
+if __name__ == "__main__":
+    main()
+
+
 
