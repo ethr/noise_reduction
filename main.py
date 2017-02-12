@@ -76,7 +76,7 @@ def play_sound(path_to_file):
     p.terminate()
 
 
-def play_and_record(in_device, out_device):
+def play_and_record(in_device, out_device, chunk_size):
     #instantiate PyAudio
     p = pyaudio.PyAudio()
 
@@ -86,7 +86,7 @@ def play_and_record(in_device, out_device):
         incr = 0.1
         instream = p.open(format=FORMAT, channels=CHANNELS,
                 rate=RATE, input=True, output=True, output_device_index=out_device,
-                frames_per_buffer=CHUNK, input_device_index=in_device)
+                frames_per_buffer=chunk_size, input_device_index=in_device)
         while True:
 
             # start Recording
@@ -96,12 +96,12 @@ def play_and_record(in_device, out_device):
             try:
                 #data = instream.read(num_frames=CHUNK)
                 data = array.array('i')
-                for i in range(0, CHUNK):
+                for i in range(0, chunk_size):
                     #data.append(random.randint(-2000, 2000))
                     f = f + incr
                     if f > 100 or f < 1:
                         incr = -incr
-                    data.append(int(sin(f*float(i)/float(CHUNK)) * 1000))
+                    data.append(int(sin(f*float(i)/float(chunk_size)) * 1000))
                 data = data.tobytes()
             except IOError:
                 continue
@@ -152,14 +152,16 @@ def main():
             print(i, device['name'])
     in_device = int(input("Select input device #:"))
 
+    sample_time = audio_reader.sample_time_milli(RATE, 2)
     chunk_size = audio_reader.chunk_size(1024)
     chunk_time = audio_reader.chunk_time_milli(RATE, 2, chunk_size)
     print("Chunk size: ", chunk_size)
     print("Chunk time: ", chunk_time)
+    print("Sample time: ", sample_time)
 
 #record(WAVE_OUTPUT_FILENAME)
 #play_sound(WAVE_OUTPUT_FILENAME)
-    play_and_record(in_device, out_device)
+    play_and_record(in_device, out_device, chunk_size)
 
 if __name__ == "__main__":
     main()
