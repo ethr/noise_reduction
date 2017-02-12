@@ -4,6 +4,7 @@ import statistics
 import struct
 import array
 import random
+import audio_reader
 from math import sin
 
 CHANNELS = 1
@@ -13,6 +14,7 @@ CHUNK = 512 # number of format values in the chuck recorded
 RECORD_MSEC = 1
 RECORD_SECONDS = 1
 WAVE_OUTPUT_FILENAME = "file.wav"
+
 
 def record(path_to_file):
 
@@ -149,6 +151,12 @@ def main():
         if 'maxInputChannels' in device and device['maxInputChannels'] > 0:
             print(i, device['name'])
     in_device = int(input("Select input device #:"))
+
+    chunk_size = audio_reader.chunk_size(1024)
+    chunk_time = audio_reader.chunk_time_milli(RATE, 2, chunk_size)
+    print("Chunk size: ", chunk_size)
+    print("Chunk time: ", chunk_time)
+
 #record(WAVE_OUTPUT_FILENAME)
 #play_sound(WAVE_OUTPUT_FILENAME)
     play_and_record(in_device, out_device)
