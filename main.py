@@ -94,7 +94,8 @@ def play_and_record(in_device, out_device, chunk_size):
             data = []
             #for i in range(0, int((RATE / (1000 * CHUNK)) * 50 * RECORD_MSEC)):
             try:
-                #data = instream.read(num_frames=CHUNK)
+                data = instream.read(num_frames=CHUNK)
+                """
                 data = array.array('i')
                 for i in range(0, chunk_size):
                     #data.append(random.randint(-2000, 2000))
@@ -103,6 +104,7 @@ def play_and_record(in_device, out_device, chunk_size):
                         incr = -incr
                     data.append(int(sin(f*float(i)/float(chunk_size)) * 1000))
                 data = data.tobytes()
+                """
             except IOError:
                 continue
             print("finished recording")
