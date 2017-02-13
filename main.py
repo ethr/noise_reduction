@@ -1,3 +1,6 @@
+#!/usr/bin/python3
+
+
 import pyaudio
 import wave
 import statistics
@@ -83,6 +86,11 @@ def play_and_record(in_device, out_device, chunk_size, chunk_time):
     #instantiate PyAudio
     p = pyaudio.PyAudio()
 
+    print(RATE)
+    print(1000 * chunk_size)
+    print(1000 * chunk_size)
+    print((RATE / (1000 * chunk_size)) * 50 * RECORD_MSEC)
+
     try:
 
         f = 1
@@ -94,12 +102,14 @@ def play_and_record(in_device, out_device, chunk_size, chunk_time):
             start_time = time_now()
             expected_time = start_time + chunk_time
             # start Recording
-            print("recording... ", start_time, " ",expected_time)
-            data = []
-            #for i in range(0, int((RATE / (1000 * CHUNK)) * 50 * RECORD_MSEC)):
+            #print("recording... ", start_time, " ",expected_time)
+            frames = []
             try:
                 if True:
-                    data = instream.read(num_frames=chunk_size)
+                    #for i in range(0, int((RATE / (1000 * chunk_size)) * 50 * RECORD_MSEC)):
+                    for i in range(0, 4):
+                        data = instream.read(num_frames=512)
+                        frames.append(data)
                 else:
                     data = array.array('i')
                     for i in range(0, chunk_size):
@@ -110,12 +120,11 @@ def play_and_record(in_device, out_device, chunk_size, chunk_time):
                         data.append(int(sin(f*float(i)/float(chunk_size)) * 1000))
                     data = data.tobytes()
             except IOError:
-                end_time = time_now()
-                print("error", end_time)
-                if end_time < expected_time:
-                   print("sleeping")
-                   time.sleep((expected_time - end_time)/1000) 
-                continue
+                print("error", time_now())
+
+            end_time = time_now()
+            #print ("stopped recording ", end_time - start_time)
+
             #print("finished recording")
             #print(len(data))
 
@@ -126,10 +135,13 @@ def play_and_record(in_device, out_device, chunk_size, chunk_time):
 
             #play stream
             #print("mean: {} max: {}".format(mean, m))
+            values = array.array('h')
+            for data in frames:
+                v = array.array('h', data)
+                values.extend(v)
+            print("Max of values: ", max(values))
+            print("Max of values: ", 100.0 * float(max(values))/65536)
             """
-            values = array.array('i', data)
-            mean = statistics.mean(data)
-            m = max(data)
             print(mean)
             print(m)
             for i in range(0, len(values)):
@@ -139,13 +151,10 @@ def play_and_record(in_device, out_device, chunk_size, chunk_time):
             #for i in range(0, len(chunk)):
                 #chunk[i] = -chunk[i]
             """
-            instream.write(data)
 
-            end_time = time_now()
-            if end_time < expected_time:
-               print("sleeping")
-               #time.sleep((expected_time - end_time)/1000) 
-            #stop stream
+            for data in frames:
+                instream.write(data)
+
     finally:
         if instream is not None:
             instream.stop_stream()
@@ -157,8 +166,6 @@ def main():
     p = pyaudio.PyAudio()
     for i in range(p.get_device_count()):
         device = p.get_device_info_by_index(i)
-        for key in device:
-           print(key)
         if 'maxOutputChannels' in device and device['maxOutputChannels'] > 0:
             print(i, device['name'])
     out_device = int(input("Select output device #:"))
