@@ -9,6 +9,7 @@ import array
 import random
 import audio_reader
 import time
+from contextlib import contextmanager
 from math import sin
 
 CHANNELS = 1
@@ -19,149 +20,91 @@ RECORD_MSEC = 1
 RECORD_SECONDS = 1
 WAVE_OUTPUT_FILENAME = "file.wav"
 
+@contextmanager
+def pyAudioManager():
+    audio = pyaudio.PyAudio()
+    yield audio
+    audio.terminate()
+
+@contextmanager
+def openStream(pyAudio, chunk_size, in_device, out_device):
+    instream = pyAudio.open(format=FORMAT, channels=CHANNELS,
+            rate=RATE, input=True, output=True, output_device_index=out_device,
+            frames_per_buffer=chunk_size, input_device_index=in_device)
+    yield instream
+    instream.close()
+
+
 def time_now():
     return int(round(time.time() * 1000))
 
-def record(path_to_file):
-
-    audio = pyaudio.PyAudio()
-
-    # start Recording
-    stream = audio.open(format=FORMAT, channels=CHANNELS,
-            rate=RATE, input=True,
-            frames_per_buffer=CHUNK, input_device_index=2)
-    print("recording...")
-    frames = []
-
-    for i in range(0, int(RATE / CHUNK * RECORD_SECONDS)):
-        data = stream.read(CHUNK)
-        frames.append(data)
-    print("finished recording")
-
-
-    # stop Recording
-    stream.stop_stream()
-    stream.close()
-    audio.terminate()
-
-    waveFile = wave.open(path_to_file, 'wb')
-    waveFile.setnchannels(CHANNELS)
-    waveFile.setsampwidth(audio.get_sample_size(FORMAT))
-    waveFile.setframerate(RATE)
-    waveFile.writeframes(b''.join(frames))
-    waveFile.close()
-
-
-
-def play_sound(path_to_file):
-    print("Playing sound")
-
-    #open a wav format music
-    f = wave.open(path_to_file)
-    #instantiate PyAudio
-    p = pyaudio.PyAudio()
-    #open stream
-    stream = p.open(format = p.get_format_from_width(f.getsampwidth()),
-            channels = f.getnchannels(),
-            rate = f.getframerate(),
-            output_device_index=2,
-            output = True)
-    #read data
-    data = f.readframes(CHUNK)
-
-    #play stream
-    while data != '':
-        stream.write(data)
-        data = f.readframes(CHUNK)
-
-    #stop stream
-    stream.stop_stream()
-    stream.close()
-
-    #close PyAudio
-    p.terminate()
-
-
 def play_and_record(in_device, out_device, chunk_size, chunk_time):
-    #instantiate PyAudio
-    p = pyaudio.PyAudio()
+    with pyAudioManager() as p:
 
-    print(RATE)
-    print(1000 * chunk_size)
-    print(1000 * chunk_size)
-    print((RATE / (1000 * chunk_size)) * 50 * RECORD_MSEC)
+        print(RATE)
+        print(1000 * chunk_size)
+        print(1000 * chunk_size)
+        print((RATE / (1000 * chunk_size)) * 50 * RECORD_MSEC)
 
-    try:
+        with openStream(p, chunk_size, in_device, out_device) as instream:
+            f = 1
+            incr = 0.1
+            while True:
+                start_time = time_now()
+                expected_time = start_time + chunk_time
+                # start Recording
+                #print("recording... ", start_time, " ",expected_time)
+                frames = []
+                try:
+                    if True:
+                        #for i in range(0, int((RATE / (1000 * chunk_size)) * 50 * RECORD_MSEC)):
+                        for i in range(0, 4):
+                            data = instream.read(num_frames=512)
+                            frames.append(data)
+                    else:
+                        data = array.array('i')
+                        for i in range(0, chunk_size):
+                            #data.append(random.randint(-2000, 2000))
+                            f = f + incr
+                            if f > 100 or f < 1:
+                                incr = -incr
+                            data.append(int(sin(f*float(i)/float(chunk_size)) * 1000))
+                        data = data.tobytes()
+                except IOError:
+                    print("error", time_now())
 
-        f = 1
-        incr = 0.1
-        instream = p.open(format=FORMAT, channels=CHANNELS,
-                rate=RATE, input=True, output=True, output_device_index=out_device,
-                frames_per_buffer=chunk_size, input_device_index=in_device)
-        while True:
-            start_time = time_now()
-            expected_time = start_time + chunk_time
-            # start Recording
-            #print("recording... ", start_time, " ",expected_time)
-            frames = []
-            try:
-                if True:
-                    #for i in range(0, int((RATE / (1000 * chunk_size)) * 50 * RECORD_MSEC)):
-                    for i in range(0, 4):
-                        data = instream.read(num_frames=512)
-                        frames.append(data)
-                else:
-                    data = array.array('i')
-                    for i in range(0, chunk_size):
-                        #data.append(random.randint(-2000, 2000))
-                        f = f + incr
-                        if f > 100 or f < 1:
-                            incr = -incr
-                        data.append(int(sin(f*float(i)/float(chunk_size)) * 1000))
-                    data = data.tobytes()
-            except IOError:
-                print("error", time_now())
+                end_time = time_now()
+                #print ("stopped recording ", end_time - start_time)
 
-            end_time = time_now()
-            #print ("stopped recording ", end_time - start_time)
+                #print("finished recording")
+                #print(len(data))
 
-            #print("finished recording")
-            #print(len(data))
+                #print("playing")
+                #open output stream
 
-            #print("playing")
-            #open output stream
+                #read data
 
-            #read data
+                #play stream
+                #print("mean: {} max: {}".format(mean, m))
+                values = array.array('h')
+                for data in frames:
+                    v = array.array('h', data)
+                    values.extend(v)
+                print("Max of values: ", max(values))
+                print("Max of values: ", 100.0 * float(max(values))/65536)
+                """
+                print(mean)
+                print(m)
+                for i in range(0, len(values)):
+                    values[i] = m - values[i]
+                print(values)
+                data = values.tobytes()
+                #for i in range(0, len(chunk)):
+                    #chunk[i] = -chunk[i]
+                """
 
-            #play stream
-            #print("mean: {} max: {}".format(mean, m))
-            values = array.array('h')
-            for data in frames:
-                v = array.array('h', data)
-                values.extend(v)
-            print("Max of values: ", max(values))
-            print("Max of values: ", 100.0 * float(max(values))/65536)
-            """
-            print(mean)
-            print(m)
-            for i in range(0, len(values)):
-                values[i] = m - values[i]
-            print(values)
-            data = values.tobytes()
-            #for i in range(0, len(chunk)):
-                #chunk[i] = -chunk[i]
-            """
-
-            for data in frames:
-                instream.write(data)
-
-    finally:
-        if instream is not None:
-            instream.stop_stream()
-            instream.close()
-        #close PyAudio
-        p.terminate()
-
+                for data in frames:
+                    instream.write(data)
 def main():
     p = pyaudio.PyAudio()
     for i in range(p.get_device_count()):
