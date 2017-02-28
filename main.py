@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-
+import csv
 import pyaudio
 import wave
 import statistics
@@ -14,9 +14,11 @@ import math
 import cmath
 import numpy
 from numpy.fft import *
+import matplotlib.pyplot as plt
 
 CHANNELS = 1
 FORMAT = pyaudio.paInt16 # affects size of recorded date
+FORMAT = pyaudio.paFloat32
 RATE = 44100 # bytes per second
 CHUNK = 512 # number of format values in the chuck recorded
 RECORD_MSEC = 1
@@ -41,22 +43,63 @@ def openStream(pyAudio, chunk_size, in_device, out_device):
 def time_now():
     return int(round(time.time() * 1000))
 
-def generate_signal(hz, phase, samples, scale):
+def gen(hz, phase, scale):
     print("Generating hz: ", hz)
-    print("Generating #", samples)
-    ret = []
     rads_per_second = 2.0 * math.pi * hz
     dt = 1/RATE
-    for i in range(0, samples):
-        value = int(math.cos(phase) * scale)
-        ret.append(value)
+    last_time = time.time()
+    while True:
+        now = time_now()
+        diff = (now - last_time)/1000.0
+        cycles = diff/RATE
         phase = phase + dt * rads_per_second
-        if phase >= 2 * math.pi:
-            phase = phase - 2 * math.pi
+        value = int(math.cos(phase) * scale)
+        #phase = phase + dt * rads_per_second
+        if phase >= 2.0 * math.pi:
+            phase = phase - 2.0 * math.pi
+        last_time = time_now()
+        yield value
 
-    foo(ret, 1/RATE)
+def generate_signal(hz, length):
+    #length = int(length * RATE)
+    rads_per_second = float(hz) * math.pi * 2.0
+    rads_per_sample = rads_per_second / RATE
+    phase = math.pi
+    last_time = time.time()
+    while True:
+        now = time.time()
+        diff = (now - last_time)
+        phase += rads_per_second * diff
+        #phase += factor * length
+        arr = numpy.arange(length) # 0,1...
+        arr = arr * rads_per_sample
+        arr += phase
+        chunk = numpy.sin(arr)
+        last_time = time.time()
+        #plt.plot(arr, chunk)
+        #plt.show()
+        #chunk *= 32767.0/10.0
+        chunk *= 0.5
+        yield chunk
 
-    return (ret, phase)
+def gen2(samples):
+    print("Generating #", samples)
+    hz = rfftfreq(samples, 1/RATE)[20]
+    l = [0 for _ in range(samples)]
+    volume = 600000.0
+    phase = 0.0
+    dt = float(1/RATE)
+    rads_per_second = 2.0 * math.pi * float(hz)
+    seconds = samples * dt
+    rads = rads_per_second * seconds
+    last_time = time_now()
+    while True:
+        now = time_now()
+        diff = (now - last_time)/1000.0
+        phase += rads_per_second * diff
+        l[20] = cmath.rect(volume, phase)
+        ret = irfft(l)
+        yield ret
 
 # TODO rename
 def foo(signal, timestep):
@@ -67,7 +110,9 @@ def foo(signal, timestep):
         rfftfreq(len(signal), timestep),
         map(lambda x : abs(x), fft),
         map(lambda x : cmath.phase(x), fft))
-    filtered = filter(lambda x : x[2] > 0.5, freqs)
+    print(max(freqs, key=lambda x : x[2]))
+    return
+    filtered = filter(lambda x : x[2] > 0.0, freqs)
     filtered = list(filtered)
     for x in filtered:
         print(x)
@@ -79,25 +124,31 @@ def foo(signal, timestep):
     #f = list(filter(lambda x : abs(x[0]) > 10000, f))
 
 def play_and_record(in_device, out_device, chunk_size, chunk_time):
-    phase = 0
+    signal_gen = generate_signal(300, 400)
+    signal_gen2 = generate_signal(1024, RATE * 5)
     with pyAudioManager() as p:
         with openStream(p, chunk_size, in_device, out_device) as instream:
             while True:
-                start_time = time_now()
-                print(phase)
-                p = generate_signal(2**9, phase, 2**10, 32767/10)
-                #phase = p[1]
-                new_signal = p[0]
-                new_values = array.array('h')
-                new_values.fromlist(new_signal)
-                instream.write(new_values.tobytes())
-                end_time = time_now()
-                dur = (end_time - start_time) / 1000
-                rads_per_second = 2.0 * math.pi * 2**9
-                phase = phase + dur * rads_per_second
-                if (phase >= 2 * math.pi):
-                    phase = phase - 2 * math.pi
+                new_signal = next(signal_gen)
+                new_signal2 = next(signal_gen2)
+                s = new_signal2
+                d = s.astype(numpy.float32).tostring()
+                instream.write(d)
                 continue
+
+                data = array.array('f')
+                f = 0
+                incr = 0.1
+                for i in range(0, RATE * 5):
+                    #data.append(random.randint(-2000, 2000))
+                    f = f + incr
+                    #if f > 100 or f < 1:
+                    #    incr = -incr
+                    #data.append(int(math.sin(f*float(i)/float(chunk_size)) * 1000))
+                    data.append(math.sin(f))
+                data = data.tobytes()
+                instream.write(data)
+                return
 
 
 
@@ -140,29 +191,22 @@ def play_and_record(in_device, out_device, chunk_size, chunk_time):
                 #for data in frames:
                     #instream.write(data)
 def main():
-    p = pyaudio.PyAudio()
-    for i in range(p.get_device_count()):
-        device = p.get_device_info_by_index(i)
-        if 'maxOutputChannels' in device and device['maxOutputChannels'] > 0:
-            print(i, device['name'])
-    out_device = int(input("Select output device #:"))
+    with pyAudioManager() as p:
+        for i in range(p.get_device_count()):
+            device = p.get_device_info_by_index(i)
+            if 'maxOutputChannels' in device and device['maxOutputChannels'] > 0:
+                print(i, device['name'])
+        out_device = int(input("Select output device #:"))
 
-    for i in range(p.get_device_count()):
-        device = p.get_device_info_by_index(i)
-        if 'maxInputChannels' in device and device['maxInputChannels'] > 0:
-            print(i, device['name'], device['defaultSampleRate'])
-    in_device = int(input("Select input device #:"))
-
-    sample_time = audio_reader.sample_time_milli(RATE, 2)
+        for i in range(p.get_device_count()):
+            device = p.get_device_info_by_index(i)
+            if 'maxInputChannels' in device and device['maxInputChannels'] > 0:
+                print(i, device['name'], device['defaultSampleRate'])
+        in_device = int(input("Select input device #:"))
     chunk_size = audio_reader.chunk_size(1024)
-    chunk_size = 2048
     chunk_time = audio_reader.chunk_time_milli(RATE, 2, chunk_size)
     print("Chunk size: ", chunk_size)
     print("Chunk time: ", chunk_time)
-    print("Sample time: ", sample_time)
-
-#record(WAVE_OUTPUT_FILENAME)
-#play_sound(WAVE_OUTPUT_FILENAME)
     play_and_record(in_device, out_device, chunk_size, chunk_time)
 
 if __name__ == "__main__":
